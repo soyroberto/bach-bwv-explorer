@@ -843,7 +843,9 @@ def tab_pivot(df: pd.DataFrame):
         st.caption(f"Showing top {max_cols-1} columns by total count.")
 
     # Style
-    styled = pivot.style.background_gradient(cmap="Blues", axis=None)
+    # Use bar-based highlighting (no matplotlib dependency)
+    numeric_cols = [c for c in pivot.columns if c != "TOTAL"]
+    styled = pivot.style.bar(subset=numeric_cols, color="#c6dbef", axis=None)
     if agg_fn in ("sum", "mean", "max"):
         styled = styled.format("{:.1f}", na_rep="—")
 
@@ -912,8 +914,9 @@ def tab_cross(df: pd.DataFrame):
             st.caption(f"Showing top {max_cols-1} columns.")
 
         st.markdown(f"#### Count: {d1_lbl} × {d2_lbl}")
+        _nc = [c for c in cross.columns if c != "TOTAL"]
         st.dataframe(
-            cross.style.background_gradient(cmap="Blues", axis=None),
+            cross.style.bar(subset=_nc, color="#c6dbef", axis=None),
             use_container_width=True, height=400,
         )
 
@@ -922,14 +925,14 @@ def tab_cross(df: pd.DataFrame):
             pct = cross.drop("TOTAL", axis=1).drop("TOTAL", axis=0)
             pct_row = pct.div(pct.sum(axis=1), axis=0).mul(100).round(1)
             st.dataframe(
-                pct_row.style.background_gradient(cmap="Greens", axis=1).format("{:.1f}%"),
+                pct_row.style.bar(color="#c7e9c0", axis=1).format("{:.1f}%"),
                 use_container_width=True, height=400,
             )
 
         with st.expander("📊 Percentage view (column %)"):
             pct_col = pct.div(pct.sum(axis=0), axis=1).mul(100).round(1)
             st.dataframe(
-                pct_col.style.background_gradient(cmap="Oranges", axis=0).format("{:.1f}%"),
+                pct_col.style.bar(color="#fdd0a2", axis=0).format("{:.1f}%"),
                 use_container_width=True, height=400,
             )
 
@@ -971,14 +974,14 @@ def tab_cross(df: pd.DataFrame):
 
             st.markdown(f"#### {d1_lbl} + {d2_lbl} vs {d3_lbl}")
             st.dataframe(
-                cross3.style.background_gradient(cmap="Blues", axis=None),
+                cross3.style.bar(color="#c6dbef", axis=None),
                 use_container_width=True, height=480,
             )
 
             with st.expander("📊 Row % view"):
                 pct = cross3.div(cross3.sum(axis=1), axis=0).mul(100).round(1)
                 st.dataframe(
-                    pct.style.background_gradient(cmap="Greens", axis=1).format("{:.1f}%"),
+                    pct.style.bar(color="#c7e9c0", axis=1).format("{:.1f}%"),
                     use_container_width=True, height=480,
                 )
 
