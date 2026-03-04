@@ -1015,7 +1015,7 @@ def _render_bio_timeline(df: pd.DataFrame):
                 "Died": c[5],
                 "Survived to adulthood": "✅ Yes" if c[3] else "❌ No",
             })
-        st.dataframe(_pd.DataFrame(child_rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(child_rows), use_container_width=True, hide_index=True)
 
     # ── Drill-down on click or year select ────────────────────────────────────
     st.markdown("---")
