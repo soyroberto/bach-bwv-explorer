@@ -504,7 +504,8 @@ def tab_charts(df: pd.DataFrame):
         "Select chart type",
         ["Timeline (Year × City)", "Heatmap (any 2 dims)", "Scatter (Year vs Duration)",
          "Sunburst (City → Mode → Key)", "Bar Chart (any dimension)",
-         "Treemap (City → Genre)", "Line (Yearly output by dimension)"],
+         "Treemap (City → Genre)", "Line (Yearly output by dimension)",
+         "🎼 Life & Works — Biographical Timeline"],
     )
 
     st.markdown("---")
@@ -778,6 +779,268 @@ def tab_charts(df: pd.DataFrame):
         if sel_cat != "— all —":
             drill = drill[drill[dim_col] == sel_cat]
         drill_table(drill, f"Year={sel_yr} × {dim_lbl}={sel_cat}")
+
+
+    # ── BIOGRAPHICAL TIMELINE
+    elif chart_type == "🎼 Life & Works — Biographical Timeline":
+        _render_bio_timeline(df)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BIOGRAPHICAL TIMELINE HELPER
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _render_bio_timeline(df: pd.DataFrame):
+    """Interactive chart overlaying Bach's life events onto his compositional output."""
+
+    import plotly.graph_objects as go
+
+    # ── Biographical data ────────────────────────────────────────────────────
+    MARRIAGES = [
+        {"year": 1707.79, "label": "Marriage 1\nMaria Barbara", "short": "Marriage 1",
+         "color": "#2196F3", "symbol": "💍",
+         "detail": "Married Maria Barbara Bach on 17 Oct 1707 in Dornheim"},
+        {"year": 1721.92, "label": "Marriage 2\nAnna Magdalena", "short": "Marriage 2",
+         "color": "#9C27B0", "symbol": "💍",
+         "detail": "Married Anna Magdalena Wilcke on 3 Dec 1721 in Köthen"},
+    ]
+
+    DEATHS = [
+        {"year": 1720.52, "label": "Maria Barbara\ndied", "short": "Maria Barbara died",
+         "color": "#E91E63", "symbol": "✝️",
+         "detail": "Maria Barbara Bach died 7 Jul 1720, age 35, while Bach was away in Carlsbad"},
+        {"year": 1750.58, "label": "Bach died", "short": "J.S. Bach died",
+         "color": "#212121", "symbol": "✝️",
+         "detail": "Johann Sebastian Bach died 28 Jul 1750, age 65, in Leipzig"},
+    ]
+
+    # All 20 children — (birth_year_decimal, name, mother, survived_to_adulthood, birth_str, death_str)
+    CHILDREN = [
+        # Children with Maria Barbara
+        (1708.99, "1. Catharina Dorothea",    "Maria Barbara", True,  "29 Dec 1708", "14 Jan 1774"),
+        (1710.89, "2. Wilhelm Friedemann",     "Maria Barbara", True,  "22 Nov 1710", "1 Jul 1784"),
+        (1713.14, "3. Maria Sophia (twin)",    "Maria Barbara", False, "23 Feb 1713", "15 Mar 1713"),
+        (1713.14, "4. Johann Christoph (twin)","Maria Barbara", False, "23 Feb 1713", "23 Feb 1713"),
+        (1714.18, "5. Carl Philipp Emanuel",   "Maria Barbara", True,  "8 Mar 1714",  "14 Dec 1788"),
+        (1715.36, "6. Johann Gottfried Bernhard","Maria Barbara",True, "11 May 1715", "27 May 1739"),
+        (1718.87, "7. Leopold Augustus",       "Maria Barbara", False, "15 Nov 1718", "29 Sep 1719"),
+        # Children with Anna Magdalena
+        (1723.42, "8. Christiana Sophia Henrietta","Anna Magdalena",False,"Spring 1723","29 Jun 1726"),
+        (1724.16, "9. Gottfried Heinrich",     "Anna Magdalena", True,  "27 Feb 1724", "12 Feb 1763"),
+        (1725.28, "10. Christian Gottlieb",    "Anna Magdalena", False, "14 Apr 1725", "21 Sep 1728"),
+        (1726.27, "11. Elisabeth Juliana Friderica","Anna Magdalena",True,"5 Apr 1726","24 Aug 1781"),
+        (1727.83, "12. Ernestus Andreas",      "Anna Magdalena", False, "30 Oct 1727", "1 Nov 1727"),
+        (1728.78, "13. Regina Johanna",        "Anna Magdalena", False, "10 Oct 1728", "25 Apr 1733"),
+        (1730.01, "14. Christiana Benedicta",  "Anna Magdalena", False, "1 Jan 1730",  "4 Jan 1730"),
+        (1731.21, "15. Christiana Dorothea",   "Anna Magdalena", False, "18 Mar 1731", "31 Aug 1732"),
+        (1732.47, "16. Johann Christoph Friedrich","Anna Magdalena",True,"21 Jun 1732","26 Jan 1795"),
+        (1733.85, "17. Johann August Abraham", "Anna Magdalena", False, "5 Nov 1733",  "6 Nov 1733"),
+        (1735.68, "18. Johann Christian",      "Anna Magdalena", True,  "5 Sep 1735",  "1 Jan 1782"),
+        (1737.80, "19. Johanna Carolina",      "Anna Magdalena", True,  "30 Oct 1737", "16 Aug 1781"),
+        (1742.14, "20. Regina Susanna",        "Anna Magdalena", True,  "22 Feb 1742", "14 Dec 1809"),
+    ]
+
+    # ── UI controls ──────────────────────────────────────────────────────────
+    st.markdown("### 🎼 Bach’s Life & Works — Biographical Timeline")
+    st.markdown(
+        "Overlay Bach’s key life events onto his compositional output. "
+        "Hover over any marker for full details. Use the controls below to customise the view."
+    )
+
+    ctrl1, ctrl2, ctrl3 = st.columns(3)
+    bg_mode = ctrl1.radio(
+        "Background layer",
+        ["Works per year (bar)", "Works per year (line)", "Individual BWV works (dots)", "Both (bars + dots)"],
+        index=0, horizontal=False,
+    )
+    show_children   = ctrl2.checkbox("Show children births",   value=True)
+    show_marriages  = ctrl2.checkbox("Show marriages",          value=True)
+    show_deaths     = ctrl2.checkbox("Show deaths",             value=True)
+    survived_only   = ctrl3.checkbox("Children: survived only", value=False)
+    color_children  = ctrl3.radio("Colour children by",
+                                   ["Mother (wife)", "Survived to adulthood"], index=0)
+
+    sub = df.dropna(subset=["year"]).copy()
+    sub["year"] = sub["year"].astype(int)
+    yearly = sub.groupby("year").size().reset_index(name="count")
+
+    fig = go.Figure()
+
+    # ── Background: works per year ───────────────────────────────────────────
+    if bg_mode in ("Works per year (bar)", "Both (bars + dots)"):
+        fig.add_trace(go.Bar(
+            x=yearly["year"], y=yearly["count"],
+            name="Works / year",
+            marker_color="rgba(180,180,180,0.45)",
+            hovertemplate="<b>%{x}</b><br>Works composed: %{y}<extra></extra>",
+        ))
+
+    if bg_mode == "Works per year (line)":
+        fig.add_trace(go.Scatter(
+            x=yearly["year"], y=yearly["count"],
+            mode="lines+markers",
+            name="Works / year",
+            line=dict(color="rgba(150,150,150,0.7)", width=2),
+            marker=dict(size=5, color="rgba(150,150,150,0.7)"),
+            hovertemplate="<b>%{x}</b><br>Works composed: %{y}<extra></extra>",
+        ))
+
+    if bg_mode in ("Individual BWV works (dots)", "Both (bars + dots)"):
+        # Jitter y slightly so overlapping dots are visible
+        import numpy as np
+        dot_df = sub.copy()
+        dot_df["jitter"] = np.random.default_rng(42).uniform(-0.3, 0.3, len(dot_df))
+        dot_df["y_pos"] = 0.5 + dot_df["jitter"]
+        fig.add_trace(go.Scatter(
+            x=dot_df["year"],
+            y=dot_df["y_pos"] if bg_mode == "Individual BWV works (dots)" else
+              dot_df["year"].map(yearly.set_index("year")["count"]) + dot_df["jitter"] * 2,
+            mode="markers",
+            name="BWV works",
+            marker=dict(size=6, color="#7a5c1e", opacity=0.55),
+            customdata=dot_df[["bwv", "title", "genre", "key_display", "city"]].values,
+            hovertemplate=(
+                "<b>BWV %{customdata[0]}</b> — %{customdata[1]}<br>"
+                "Genre: %{customdata[2]}<br>"
+                "Key: %{customdata[3]}<br>"
+                "City: %{customdata[4]}<br>"
+                "Year: %{x}<extra></extra>"
+            ),
+        ))
+
+    # ── Children markers ─────────────────────────────────────────────────────
+    if show_children:
+        children_to_show = [c for c in CHILDREN if (not survived_only or c[3])]
+
+        # Separate by mother or survival
+        if color_children == "Mother (wife)":
+            groups = {
+                "Maria Barbara's child": ([c for c in children_to_show if c[2] == "Maria Barbara"],
+                                           "#2196F3", "circle"),
+                "Anna Magdalena's child": ([c for c in children_to_show if c[2] == "Anna Magdalena"],
+                                            "#9C27B0", "circle"),
+            }
+        else:
+            groups = {
+                "Survived to adulthood": ([c for c in children_to_show if c[3]],  "#4CAF50", "circle"),
+                "Died in childhood":     ([c for c in children_to_show if not c[3]], "#F44336", "x"),
+            }
+
+        for grp_name, (grp_children, grp_color, grp_symbol) in groups.items():
+            if not grp_children:
+                continue
+            # Place child markers at a fixed y position above the bars
+            y_max = int(yearly["count"].max()) if len(yearly) > 0 else 20
+            child_y = y_max * 1.12
+            fig.add_trace(go.Scatter(
+                x=[c[0] for c in grp_children],
+                y=[child_y] * len(grp_children),
+                mode="markers+text",
+                name=grp_name,
+                marker=dict(size=12, color=grp_color, symbol=grp_symbol,
+                            line=dict(width=1.5, color="white")),
+                text=[c[1].split(".")[0] + "." for c in grp_children],  # just the number
+                textposition="top center",
+                textfont=dict(size=8),
+                customdata=[[c[1], c[2], c[4], c[5], "Survived" if c[3] else "Died in childhood"]
+                             for c in grp_children],
+                hovertemplate=(
+                    "<b>%{customdata[0]}</b><br>"
+                    "Mother: %{customdata[1]}<br>"
+                    "Born: %{customdata[2]}<br>"
+                    "Died: %{customdata[3]}<br>"
+                    "%{customdata[4]}<extra></extra>"
+                ),
+            ))
+
+    # ── Marriage vertical lines ───────────────────────────────────────────────
+    if show_marriages:
+        for m in MARRIAGES:
+            fig.add_vline(
+                x=m["year"],
+                line_width=2, line_dash="dash", line_color=m["color"],
+                annotation_text=m["symbol"] + " " + m["short"],
+                annotation_position="top",
+                annotation_font_size=10,
+                annotation_font_color=m["color"],
+            )
+
+    # ── Death vertical lines ──────────────────────────────────────────────────
+    if show_deaths:
+        for d in DEATHS:
+            fig.add_vline(
+                x=d["year"],
+                line_width=2.5, line_dash="dot", line_color=d["color"],
+                annotation_text=d["symbol"] + " " + d["short"],
+                annotation_position="top right",
+                annotation_font_size=10,
+                annotation_font_color=d["color"],
+            )
+
+    # ── Layout ────────────────────────────────────────────────────────────────
+    y_max_val = int(yearly["count"].max()) if len(yearly) > 0 else 20
+    fig.update_layout(
+        title="Bach’s Life & Works — Biographical Timeline (1700–1750)",
+        xaxis=dict(
+            title="Year",
+            range=[1699, 1752],
+            tickmode="linear", dtick=5,
+            showgrid=True, gridcolor="rgba(200,200,200,0.4)",
+        ),
+        yaxis=dict(
+            title="Works composed",
+            range=[0, y_max_val * 1.35],
+            showgrid=True, gridcolor="rgba(200,200,200,0.4)",
+        ),
+        height=560,
+        margin=dict(l=10, r=10, t=60, b=10),
+        legend=dict(orientation="h", y=-0.18, font=dict(size=11)),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        hovermode="closest",
+    )
+
+    event = st.plotly_chart(fig, use_container_width=True, on_select="rerun",
+                            selection_mode=["points"])
+
+    # ── Legend / reference table ──────────────────────────────────────────────
+    with st.expander("📚 Full children reference table", expanded=False):
+        child_rows = []
+        for c in CHILDREN:
+            child_rows.append({
+                "#": c[1].split(".")[0] + ".",
+                "Name": c[1].split(". ", 1)[1] if ". " in c[1] else c[1],
+                "Mother": c[2],
+                "Born": c[4],
+                "Died": c[5],
+                "Survived to adulthood": "✅ Yes" if c[3] else "❌ No",
+            })
+        st.dataframe(_pd.DataFrame(child_rows), use_container_width=True, hide_index=True)
+
+    # ── Drill-down on click or year select ────────────────────────────────────
+    st.markdown("---")
+    st.markdown("**🔍 Select a year to see all works composed that year:**")
+    years_avail = sorted(sub["year"].dropna().unique().astype(int).tolist())
+    sel_yr = st.selectbox("Year", ["— all —"] + years_avail, key="bio_yr")
+    if sel_yr != "— all —":
+        drill = sub[sub["year"] == int(sel_yr)]
+        # Also show life events in that year
+        events_that_year = []
+        for m in MARRIAGES:
+            if int(m["year"]) == int(sel_yr):
+                events_that_year.append(f"💍 {m['detail']}")
+        for d in DEATHS:
+            if int(d["year"]) == int(sel_yr):
+                events_that_year.append(f"✝️ {d['detail']}")
+        for c in CHILDREN:
+            if int(c[0]) == int(sel_yr):
+                survived = "survived to adulthood" if c[3] else "died in childhood"
+                events_that_year.append(f"👶 {c[1]} born {c[4]}, {survived}")
+        if events_that_year:
+            st.info("**Life events in " + str(sel_yr) + ":**\n" + "\n".join(events_that_year))
+        drill_table(drill, f"Year = {sel_yr}")
+    else:
+        drill_table(sub, "All works")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
