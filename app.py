@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 
+import requests
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -294,6 +295,81 @@ def drill_table(df: pd.DataFrame, title: str = ""):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# APPLE MUSIC / ITUNES PREVIEW HELPER
+# ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _itunes_preview(bwv: str, title: str) -> dict:
+    """Search iTunes API for a Bach BWV preview. Returns dict with preview info."""
+    queries = [
+        f"Bach BWV {bwv}",
+        f"Johann Sebastian Bach {title}",
+        f"Bach {title}",
+    ]
+    try:
+        for q in queries:
+            resp = requests.get(
+                "https://itunes.apple.com/search",
+                params={"term": q, "media": "music", "entity": "song",
+                        "limit": 5, "country": "US"},
+                timeout=8,
+            )
+            if resp.status_code != 200:
+                continue
+            tracks = resp.json().get("results", [])
+            for t in tracks:
+                name_pool = (
+                    t.get("artistName", "") +
+                    t.get("collectionName", "") +
+                    t.get("trackName", "")
+                ).lower()
+                if t.get("previewUrl") and "bach" in name_pool:
+                    art = t.get("artworkUrl100", "").replace("100x100bb", "300x300bb")
+                    return {
+                        "found": True,
+                        "trackName": t.get("trackName", ""),
+                        "artistName": t.get("artistName", ""),
+                        "collectionName": t.get("collectionName", ""),
+                        "artworkUrl": art,
+                        "previewUrl": t.get("previewUrl", ""),
+                        "trackViewUrl": t.get("trackViewUrl", ""),
+                    }
+    except Exception:
+        pass
+    return {"found": False}
+
+
+def _render_apple_preview(bwv: str, title: str):
+    """Render the Apple Music preview block inside the record card."""
+    st.markdown("---")
+    st.markdown("**🎵 Apple Music Preview**")
+
+    with st.spinner("Searching Apple Music…"):
+        info = _itunes_preview(bwv, title)
+
+    if not info["found"]:
+        st.caption("🚫 No preview found on Apple Music for this work.")
+        return
+
+    col_art, col_info = st.columns([1, 3])
+    with col_art:
+        if info["artworkUrl"]:
+            st.image(info["artworkUrl"], width=110)
+    with col_info:
+        st.markdown(f"**{info['trackName']}**")
+        st.caption(f"🎤 {info['artistName']}")
+        st.caption(f"💿 {info['collectionName']}")
+        if info.get("trackViewUrl"):
+            st.markdown(
+                f"[Open in Apple Music ↗]({info['trackViewUrl']})",
+                unsafe_allow_html=False,
+            )
+
+    # Native Streamlit audio player (30-sec preview)
+    st.audio(info["previewUrl"], format="audio/mp4")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # TAB 1 — BWV SEARCH & RECORD DETAIL
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -466,6 +542,9 @@ def _render_record_card(row, tracker):
 
     if row.get("notes"):
         st.info(f"📝 {row['notes']}")
+
+    # Apple Music Preview — auto-loads when BWV is selected
+    _render_apple_preview(str(bwv), str(row.get("title", "")))
 
     # Listening tracker inline
     st.markdown("---")
