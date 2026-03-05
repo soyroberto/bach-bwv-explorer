@@ -1465,6 +1465,26 @@ def main():
     with tab5:
         tab_tracker(filtered_df)
 
+    # ── Footer ───────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown(
+        """
+        <div style="
+            text-align: center;
+            color: #888888;
+            font-size: 0.82rem;
+            padding: 8px 0 16px 0;
+            font-family: 'Georgia', serif;
+            letter-spacing: 0.04em;
+        ">
+            &copy; All rights reserved &mdash; Made by <strong>Roberto</strong>
+            &nbsp;(<a href="mailto:bach@rober.to" style="color:#888888;text-decoration:none;">bach@rober.to</a>)&nbsp;
+            <span style="font-variant: small-caps;">MMX</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
 
 if __name__ == "__main__":
     main()
