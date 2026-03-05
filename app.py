@@ -151,8 +151,8 @@ def apply_filters(df: pd.DataFrame, f: dict) -> pd.DataFrame:
 def render_sidebar(df: pd.DataFrame) -> dict:
     with st.sidebar:
         st.image(
-            "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6a/Johann_Sebastian_Bach.jpg/220px-Johann_Sebastian_Bach.jpg",
-            width=110,
+            "https://files.manuscdn.com/user_upload_by_module/session_file/107476622/BpogkrqiIYRpAppT.png",
+            width=130,
         )
         st.title("🎼 Bach BWV Explorer")
         st.caption("Multi-dimensional analysis · 1,117 works")
