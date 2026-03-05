@@ -298,7 +298,7 @@ def drill_table(df: pd.DataFrame, title: str = ""):
 # APPLE MUSIC / ITUNES PREVIEW HELPER
 # ─────────────────────────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=86400, show_spinner=False)  # cache for 24 hours
 def _itunes_preview(bwv: str, title: str) -> dict:
     """Search iTunes API for a Bach BWV preview. Returns dict with preview info."""
     queries = [
@@ -391,28 +391,35 @@ def tab_search(df: pd.DataFrame):
 
     result = df.copy()
     if search:
-        s = search.strip().lower()
+        import re as _re
+        s_raw  = search.strip().lower()
+        # Normalise "bwv 899", "bwv899", "BWV899" → bare number for BWV matching
+        s_bwv  = _re.sub(r'^bwv\s*', '', s_raw).strip()  # strip leading 'bwv' + spaces
+        # Also build a plain string for full-text matching
+        s      = s_raw
         if search_field == "All fields":
             mask = (
-                result["bwv"].astype(str).str.lower().str.contains(s, na=False) |
-                result["title"].astype(str).str.lower().str.contains(s, na=False) |
-                result["genre"].astype(str).str.lower().str.contains(s, na=False) |
-                result["city"].astype(str).str.lower().str.contains(s, na=False) |
-                result["instrument_str"].astype(str).str.lower().str.contains(s, na=False) |
-                result["key_display"].astype(str).str.lower().str.contains(s, na=False)
+                result["bwv"].astype(str).str.lower().str.contains(_re.escape(s_bwv), na=False) |
+                result["bwv"].astype(str).str.lower().str.contains(_re.escape(s), na=False) |
+                result["title"].astype(str).str.lower().str.contains(_re.escape(s), na=False) |
+                result["genre"].astype(str).str.lower().str.contains(_re.escape(s), na=False) |
+                result["city"].astype(str).str.lower().str.contains(_re.escape(s), na=False) |
+                result["instrument_str"].astype(str).str.lower().str.contains(_re.escape(s), na=False) |
+                result["key_display"].astype(str).str.lower().str.contains(_re.escape(s), na=False)
             )
         elif search_field == "BWV":
-            mask = result["bwv"].astype(str).str.lower().str.contains(s, na=False)
+            # Match on the stripped number so "bwv 899", "bwv899", "899" all work
+            mask = result["bwv"].astype(str).str.lower().str.contains(_re.escape(s_bwv), na=False)
         elif search_field == "Title":
-            mask = result["title"].astype(str).str.lower().str.contains(s, na=False)
+            mask = result["title"].astype(str).str.lower().str.contains(_re.escape(s), na=False)
         elif search_field == "Genre":
-            mask = result["genre"].astype(str).str.lower().str.contains(s, na=False)
+            mask = result["genre"].astype(str).str.lower().str.contains(_re.escape(s), na=False)
         elif search_field == "City":
-            mask = result["city"].astype(str).str.lower().str.contains(s, na=False)
+            mask = result["city"].astype(str).str.lower().str.contains(_re.escape(s), na=False)
         elif search_field == "Instrument":
-            mask = result["instrument_str"].astype(str).str.lower().str.contains(s, na=False)
+            mask = result["instrument_str"].astype(str).str.lower().str.contains(_re.escape(s), na=False)
         elif search_field == "Key":
-            mask = result["key_display"].astype(str).str.lower().str.contains(s, na=False)
+            mask = result["key_display"].astype(str).str.lower().str.contains(_re.escape(s), na=False)
         else:
             mask = pd.Series([True] * len(result), index=result.index)
         result = result[mask]
